@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Điểm Danh NFC Sinh Viên</title>
+  <title>Điểm Danh & Debug NFC</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -16,7 +16,7 @@
       padding: 24px;
       border-radius: 12px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      max-width: 400px;
+      max-width: 450px;
       margin: 0 auto;
     }
     button {
@@ -32,9 +32,9 @@
     }
     button:active { background-color: #0056b3; }
     
-    /* Khung hiển thị kết quả sinh viên */
+    /* Khung hiển thị kết quả điểm danh */
     .result-box {
-      margin-top: 20px;
+      margin-top: 15px;
       padding: 16px;
       border-radius: 8px;
       text-align: left;
@@ -51,27 +51,31 @@
       border: 1px solid #f5c6cb;
     }
     
+    /* Khung in log debug chi tiết */
     #log {
-      margin-top: 20px;
+      margin-top: 15px;
       text-align: left;
-      background: #eef2f7;
+      background: #1e1e1e;
+      color: #00ff66;
       padding: 15px;
       border-radius: 8px;
-      font-family: monospace;
-      font-size: 13px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
       white-space: pre-wrap;
       word-break: break-all;
+      max-height: 400px;
+      overflow-y: auto;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h2>Điểm Danh Sinh Viên NFC</h2>
-    <p>Chạm thẻ sinh viên vào mặt lưng điện thoại sau khi bật quét.</p>
+    <h2>NFC Reader & Debugger</h2>
+    <p>Chạm thẻ sinh viên vào mặt lưng điện thoại để đọc dữ liệu.</p>
     <button id="scanBtn">Bắt đầu quét NFC</button>
     
-    <!-- Khung thông tin sinh viên sau khi check-in thành công/thất bại -->
+    <!-- Khung kết quả điểm danh (không đè lên log) -->
     <div id="resultBox" class="result-box">
       <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
       <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
@@ -80,13 +84,13 @@
       <p style="margin: 5px 0;"><strong>UID Thẻ:</strong> <small id="resUid"></small></p>
     </div>
 
-    <div id="log">Trạng thái: Sẵn sàng...</div>
+    <!-- Khung log debug dữ liệu thẻ -->
+    <div id="log">Trạng thái: Sẵn sàng quét...</div>
   </div>
 
   <script>
-    // ⚙️ ĐƯỜNG DẪN BACKEND API: Thay đổi URL này tương ứng với domain backend của bạn
-    // Ví dụ khi dev local: 'http://localhost:3000/api/checkin' hoặc khi deploy: 'https://your-backend.onrender.com/api/checkin'
-    const BACKEND_URL = 'https://checkinnfc-production.up.railway.app/api/checkin';
+    // ⚙️ THAY BẰNG URL BACKEND RAILWAY CỦA BẠN
+    const BACKEND_URL = 'https://nfc-backend-production-xxxx.up.railway.app/api/checkin';
 
     const scanBtn = document.getElementById('scanBtn');
     const logDiv = document.getElementById('log');
@@ -97,12 +101,13 @@
     const resTime = document.getElementById('resTime');
     const resUid = document.getElementById('resUid');
 
+    // Hàm in log nối tiếp (không bao giờ xóa log cũ trừ khi bật quét mới)
     function log(message) {
       logDiv.textContent += '\n' + message;
+      logDiv.scrollTop = logDiv.scrollHeight; // Tự động cuộn xuống cuối
     }
 
     scanBtn.addEventListener('click', async () => {
-      // 1. Kiểm tra Web NFC support
       if (!('NDEFReader' in window)) {
         logDiv.textContent = '❌ Trình duyệt hoặc thiết bị này không hỗ trợ Web NFC (Cần Chrome trên Android).';
         return;
@@ -110,78 +115,66 @@
 
       try {
         logDiv.textContent = '⏳ Đang khởi tạo cảm biến NFC...';
-        resultBox.style.display = 'none'; // Ẩn kết quả cũ
+        resultBox.style.display = 'none';
         
         const ndef = new NDEFReader();
         await ndef.scan();
         
-        logDiv.textContent = '✅ Cảm biến đang bật! Vui lòng chạm thẻ sinh viên vào mặt lưng điện thoại...';
+        logDiv.textContent = '✅ Cảm biến NFC đang bật! Vui lòng chạm thẻ vào mặt lưng...';
 
         ndef.addEventListener("readingerror", () => {
           log("⚠️ Không thể đọc dữ liệu thẻ. Hãy thử lại!");
         });
 
-        // 2. Khi quét thành công UID thẻ
+        // Đọc dữ liệu chi tiết từ thẻ NFC
         ndef.addEventListener("reading", async ({ message, serialNumber }) => {
-          // 1. In tiêu đề Debug
-          log("\n==========================================");
-          log(`🔍 [DEBUG NFC SCAN] - ${new Date().toLocaleTimeString('vi-VN')}`);
-          log(`------------------------------------------`);
-          
-          // 2. Đọc mã UID phần cứng của thẻ (Hardware Serial Number)
-          log(`💳 Mã UID thẻ (Serial Number): ${serialNumber || 'Không thể lấy UID'}`);
-          log(`📦 Số lượng bản ghi NDEF (Records): ${message.records.length}`);
+          // In Debug dữ liệu thẻ lên khung log đen
+          log(`\n==========================================`);
+          log(`🔍 [NFC SCAN DETECTED] - ${new Date().toLocaleTimeString('vi-VN')}`);
+          log(`💳 Mã UID (Serial Number): ${serialNumber || 'Không thể lấy UID'}`);
+          log(`📦 Số lượng bản ghi NDEF: ${message.records.length}`);
 
-          // 3. Nếu thẻ không có dữ liệu NDEF (Thẻ trắng hoặc thẻ bị khóa)
           if (message.records.length === 0) {
-            log(`ℹ️ Ghi chú: Thẻ trống hoặc sử dụng định dạng riêng (chỉ đọc được UID phần cứng để điểm danh).`);
+            log(`ℹ️ Ghi chú: Thẻ trống hoặc không dùng định dạng NDEF.`);
           } else {
-            // 4. Duyệt qua và đọc chi tiết từng NDEF Record có trong thẻ
             const textDecoder = new TextDecoder();
-
             message.records.forEach((record, index) => {
-              log(`\n--- Bản ghi NDEF #${index + 1} ---`);
-              log(`• Loại bản ghi (Record Type): ${record.recordType}`);
-              if (record.mediaType) log(`• Kiểu MIME (Media Type): ${record.mediaType}`);
-              if (record.id) log(`• Record ID: ${record.id}`);
-              if (record.encoding) log(`• Chuẩn mã hóa: ${record.encoding}`);
-              if (record.lang) log(`• Ngôn ngữ: ${record.lang}`);
-
-              // Giải mã Payload / Data
+              log(`\n--- Record NDEF #${index + 1} ---`);
+              log(`• Type: ${record.recordType}`);
+              if (record.mediaType) log(`• MIME Type: ${record.mediaType}`);
+              
               if (record.data) {
-                log(`• Kích thước Data: ${record.data.byteLength} bytes`);
-
-                // 解码 1: Chuỗi văn bản (UTF-8 Text)
+                log(`• Data Size: ${record.data.byteLength} bytes`);
                 try {
                   const decodedText = textDecoder.decode(record.data);
-                  log(`• Dữ liệu chữ (Decoded Text): "${decodedText}"`);
+                  log(`• Text Decoded: "${decodedText}"`);
                 } catch (e) {
-                  log(`• Dữ liệu chữ: [Không phải chuẩn UTF-8]`);
+                  log(`• Text Decoded: [Không thể giải mã UTF-8]`);
                 }
 
-                // 解码 2: Dữ liệu Byte thô mã HEX (Raw Hex Bytes)
+                // Chuyển dữ liệu Byte thô sang dạng HEX
                 const byteArray = new Uint8Array(record.data.buffer);
                 const hexArray = Array.from(byteArray).map(b => b.toString(16).padStart(2, '0').toUpperCase());
-                log(`• Dữ liệu mảng Byte (HEX): ${hexArray.join(' ')}`);
+                log(`• HEX Bytes: ${hexArray.join(' ')}`);
               }
             });
           }
+          log(`==========================================`);
 
-          log(`==========================================\n`);
-
-          // 5. Sau khi in Debug xong, vẫn tiếp tục gửi UID lên Backend để điểm danh như bình thường
+          // Tiến hành gọi API điểm danh mà KHÔNG XÓA khung log debug
           if (serialNumber) {
             await checkinStudent(serialNumber);
           }
         });
-        
+
       } catch (error) {
         logDiv.textContent = `❌ Lỗi NFC: ${error.message || error}`;
       }
     });
 
-    // Hàm gọi API Backend điểm danh
+    // Hàm gọi API điểm danh
     async function checkinStudent(uid) {
+      log(`\n🚀 Đang gửi UID [${uid}] lên Server Backend...`);
       try {
         const response = await fetch(BACKEND_URL, {
           method: 'POST',
@@ -192,7 +185,6 @@
         const result = await response.json();
 
         if (result.success) {
-          // Trường hợp UID có trong CSDL -> Hiện thông tin điểm danh thành công
           resultBox.className = 'result-box success';
           resTitle.textContent = '🎉 Điểm Danh Thành Công!';
           resName.textContent = result.data.fullName;
@@ -201,21 +193,20 @@
           resUid.textContent = result.data.uid;
           resultBox.style.display = 'block';
 
-          logDiv.textContent = `✅ Đã nhận diện: ${result.data.fullName} (${result.data.mssv})`;
+          log(`✅ Backend trả về: Nhận diện thành công [${result.data.fullName} - ${result.data.mssv}]`);
         } else {
-          // Trường hợp thẻ chưa đăng ký trong CSDL
           resultBox.className = 'result-box error';
           resTitle.textContent = '❌ Thẻ Chưa Đăng Ký';
-          resName.textContent = 'Không tìm thấy';
+          resName.textContent = 'Chưa có dữ liệu';
           resMssv.textContent = 'N/A';
           resTime.textContent = new Date().toLocaleTimeString('vi-VN');
           resUid.textContent = uid;
           resultBox.style.display = 'block';
 
-          logDiv.textContent = `⚠️ Thông báo: ${result.message}`;
+          log(`⚠️ Backend trả về: ${result.message}`);
         }
       } catch (err) {
-        logDiv.textContent = `❌ Lỗi kết nối Backend API: ${err.message}\n(Vui lòng kiểm tra biến BACKEND_URL và server Node.js)`;
+        log(`❌ Lỗi kết nối Backend: ${err.message}`);
       }
     }
   </script>
