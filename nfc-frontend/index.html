@@ -139,7 +139,9 @@
     const resMethod = document.getElementById('resMethod');
     const resTime = document.getElementById('resTime');
 
-    // 1. Xử lý quét thẻ NFC
+    // ==========================================
+    // LUỒNG 1: QUÉT THẺ NFC (HOÀN TOÀN ĐỘC LẬP)
+    // ==========================================
     scanBtn.addEventListener('click', async () => {
       if (!('NDEFReader' in window)) {
         statusText.textContent = '❌ Trình duyệt không hỗ trợ Web NFC (Cần Chrome Android).';
@@ -148,15 +150,15 @@
 
       try {
         statusText.textContent = '⏳ Đang bật NFC... Chạm thẻ vào mặt lưng!';
-        resultBox.style.display = 'none';
 
         const ndef = new NDEFReader();
         await ndef.scan();
 
         ndef.addEventListener("reading", async ({ serialNumber }) => {
           if (serialNumber) {
-            statusText.textContent = `💳 Đã quét được thẻ (UID: ${serialNumber})`;
-            await processCheckin({ uid: serialNumber });
+            statusText.textContent = `💳 Đã quét thẻ NFC (UID: ${serialNumber})`;
+            // Gửi request NFC, tham số isManual = false (Không đụng đến ô MSSV)
+            await processCheckin({ uid: serialNumber }, false);
           }
         });
       } catch (error) {
@@ -164,18 +166,23 @@
       }
     });
 
-    // 2. Xử lý nhập MSSV thủ công
+    // ==========================================
+    // LUỒNG 2: NHẬP MSSV THỦ CÔNG
+    // ==========================================
     manualForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const mssv = mssvInput.value.trim();
       if (!mssv) return;
 
       statusText.textContent = `⏳ Đang kiểm tra MSSV ${mssv}...`;
-      await processCheckin({ mssv: mssv });
+      // Gửi request thủ công, tham số isManual = true
+      await processCheckin({ mssv: mssv }, true);
     });
 
-    // 3. Hàm gửi request Check-in chung (dùng cho cả NFC và MSSV)
-    async function processCheckin(payload) {
+    // ==========================================
+    // HÀM XỬ LÝ CHECK-IN CHUNG
+    // ==========================================
+    async function processCheckin(payload, isManual = false) {
       try {
         const response = await fetch(BACKEND_URL, {
           method: 'POST',
@@ -190,18 +197,22 @@
           resTitle.textContent = '🎉 Điểm Danh Thành Công!';
           resName.textContent = result.data.fullName;
           resMssv.textContent = result.data.mssv;
-          resMethod.textContent = result.data.method || (payload.uid ? 'Thẻ NFC' : 'Thủ công');
+          resMethod.textContent = result.data.method || (isManual ? 'Thủ công' : 'Thẻ NFC');
           resTime.textContent = result.data.timestamp;
           resultBox.style.display = 'block';
 
           statusText.textContent = '✅ Đã ghi nhận điểm danh!';
-          mssvInput.value = ''; // Xóa ô nhập sau khi thành công
+
+          // CHỈ XÓA Ô NHẬP NẾU ĐÂY LÀ LƯỢT CHECK-IN THỦ CÔNG
+          if (isManual) {
+            mssvInput.value = '';
+          }
         } else {
           resultBox.className = 'result-box error';
           resTitle.textContent = '❌ Thất Bại';
           resName.textContent = 'Không tìm thấy';
           resMssv.textContent = payload.mssv || 'N/A';
-          resMethod.textContent = payload.uid ? 'Thẻ NFC' : 'Thủ công';
+          resMethod.textContent = isManual ? 'Thủ công' : 'Thẻ NFC';
           resTime.textContent = new Date().toLocaleTimeString('vi-VN');
           resultBox.style.display = 'block';
 
