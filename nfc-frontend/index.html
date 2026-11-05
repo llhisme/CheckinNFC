@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hệ Thống Điểm Danh Sinh Viên Multi-Mode</title>
+  <title>Hệ Thống Điểm Danh Sinh Viên</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,70 +13,36 @@
     }
     .card {
       background: white;
-      padding: 24px;
+      padding: 30px 24px;
       border-radius: 12px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       max-width: 420px;
-      margin: 0 auto;
+      margin: 40px auto 0 auto;
     }
-    .btn {
-      padding: 14px 28px;
-      font-size: 16px;
-      font-weight: bold;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      width: 100%;
-      box-sizing: border-box;
+    h2 {
+      margin-top: 0;
+      color: #333;
     }
-    .btn-primary { background-color: #007bff; }
-    .btn-success { background-color: #28a745; margin-top: 10px; }
-
-    .status-badge {
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 15px;
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeeba;
-    }
-
-    .divider {
-      margin: 20px 0;
-      position: relative;
-      text-align: center;
-    }
-    .divider::before {
-      content: "";
-      position: absolute;
-      top: 50%; left: 0; right: 0;
-      height: 1px;
-      background: #ddd;
-      z-index: 1;
-    }
-    .divider span {
-      background: white;
-      padding: 0 12px;
-      position: relative;
-      z-index: 2;
+    .hint-text {
+      font-size: 14px;
       color: #6c757d;
-      font-size: 13px;
-      font-weight: bold;
+      margin-bottom: 20px;
     }
-
     input[type="text"] {
       width: 100%;
-      padding: 12px;
-      font-size: 15px;
-      border: 1px solid #ced4da;
+      padding: 16px;
+      font-size: 18px;
+      border: 2px solid #007bff;
       border-radius: 8px;
       box-sizing: border-box;
       text-align: center;
+      outline: none;
+      box-shadow: 0 0 8px rgba(0, 123, 255, 0.25);
     }
-
+    input[type="text"]:focus {
+      border-color: #0056b3;
+      box-shadow: 0 0 10px rgba(0, 86, 179, 0.4);
+    }
     .result-box {
       margin-top: 20px;
       padding: 16px;
@@ -92,21 +58,17 @@
 
   <div class="card">
     <h2>Điểm Danh Sinh Viên</h2>
+    <p class="hint-text">Quét mã QR hoặc Nhập MSSV rồi nhấn <strong>ENTER</strong></p>
 
-    <!-- THANH TRẠNG THÁI HỆ THỐNG -->
-    <div id="statusBadge" class="status-badge">
-      📷 Sẵn sàng nhận máy quét QR / NFC
-    </div>
-
-    <!-- PHƯƠNG THỨC 1: QUÉT NFC -->
-    <button id="scanBtn" class="btn btn-primary">📲 Bật Cảm Biến NFC</button>
-
-    <div class="divider"><span>HOẶC QUÉT QR / NHẬP MSSV</span></div>
-
-    <!-- PHƯƠNG THỨC 2: QUÉT QR HOẶC NHẬP THỦ CÔNG -->
-    <form id="manualForm">
-      <input type="text" id="mssvInput" placeholder="Nhập MSSV hoặc Quét mã QR..." required autocomplete="off">
-      <button type="submit" class="btn btn-success">✅ Check-in</button>
+    <!-- FORM CHỈ CHỨA Ô INPUT (KHÔNG NÚT) -->
+    <form id="checkinForm">
+      <input 
+        type="text" 
+        id="mssvInput" 
+        placeholder="Nhập MSSV / Quét QR..." 
+        autocomplete="off"
+        autofocus
+      >
     </form>
 
     <!-- KHUNG KẾT QUẢ KHI ĐIỂM DANH -->
@@ -114,137 +76,52 @@
       <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
       <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
       <p style="margin: 5px 0;"><strong>MSSV:</strong> <span id="resMssv"></span></p>
-      <p style="margin: 5px 0;"><strong>Hình thức:</strong> <span id="resMethod"></span></p>
       <p style="margin: 5px 0;"><strong>Thời gian:</strong> <span id="resTime"></span></p>
     </div>
   </div>
 
   <script>
-    // ⚙️ URL API Backend trên Railway/Render của bạn
+    // ⚙️ URL API Backend trên Railway của bạn
     const BACKEND_URL = 'https://checkinnfc-production.up.railway.app/api/checkin';
 
-    const statusBadge = document.getElementById('statusBadge');
-    const scanBtn = document.getElementById('scanBtn');
-    const manualForm = document.getElementById('manualForm');
+    const checkinForm = document.getElementById('checkinForm');
     const mssvInput = document.getElementById('mssvInput');
 
     const resultBox = document.getElementById('resultBox');
     const resTitle = document.getElementById('resTitle');
     const resName = document.getElementById('resName');
     const resMssv = document.getElementById('resMssv');
-    const resMethod = document.getElementById('resMethod');
     const resTime = document.getElementById('resTime');
 
-    let isNfcStarted = false;
-
-    // =======================================================
-    // LUỒNG 1: XỬ LÝ MÁY QUÉT QR NGOẠI VI (HOÀN TOÀN TÁCH BIỆT)
-    // =======================================================
-    let qrBuffer = '';
-    let lastKeyTime = 0;
-    let lastKeyChar = '';
-
-    // Bắt sự kiện phím ở Capture Phase (useCapture = true) để chặn trước khi lọt vào Input
-    document.addEventListener('keydown', (e) => {
-      // Bỏ qua các phím điều khiển hệ thống (Shift, Alt, Ctrl...)
-      if (e.key !== 'Enter' && e.key.length !== 1) return;
-
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTime;
-      lastKeyTime = currentTime;
-
-      // 💥 NẾU PHÁT HIỆN TỐC ĐỘ GÕ CỦA MÁY QUÉT (Tốc độ < 35ms giữa các phím)
-      if (timeDiff < 35) {
-        // Nếu đây là ký tự thứ 2 của máy quét, thu hồi lại ký tự đầu tiên đã lỡ lọt vào ô input
-        if (qrBuffer.length === 0 && lastKeyChar) {
-          qrBuffer += lastKeyChar;
-          if (document.activeElement === mssvInput && mssvInput.value.endsWith(lastKeyChar)) {
-            mssvInput.value = mssvInput.value.slice(0, -1); // Xóa ký tự rác vừa nhảy vào input
-          }
-        }
-
-        // 🛑 CHẶN KHÔNG CHO KÝ TỰ CỦA MÁY QUÉT GÕ VÀO Ô INPUT THỦ CÔNG
-        e.preventDefault();
-
-        if (e.key === 'Enter') {
-          if (qrBuffer.length >= 3) {
-            const scannedMssv = qrBuffer;
-            qrBuffer = '';
-            lastKeyChar = '';
-            statusBadge.textContent = `📷 Đã quét thành công QR: ${scannedMssv}`;
-            
-            // Gửi API điểm danh QR độc lập (isManual = false -> KHÔNG xóa ô gõ dở)
-            processCheckin({ mssv: scannedMssv }, false, 'Máy quét QR');
-          }
-        } else {
-          qrBuffer += e.key;
-        }
-      } else {
-        // 👤 NẾU LÀ NGƯỜI DÙNG GÕ TAY BÌNH THƯỜNG (Tốc độ gõ chậm)
-        if (timeDiff > 150) {
-          qrBuffer = ''; // Reset buffer máy quét
-        }
-        lastKeyChar = e.key; // Lưu lại ký tự phòng trường hợp máy quét bắt đầu bắn ở phím sau
-      }
-    }, true); // Parameter "true" giúp chặn sự kiện phím trước khi ô Input nhận được
-
-    // =======================================================
-    // LUỒNG 2: CẢM BIẾN QUÉT THẺ NFC
-    // =======================================================
-    async function startNFCContinuous() {
-      if (isNfcStarted) return;
-
-      if (!('NDEFReader' in window)) {
-        statusBadge.style.background = '#f8d7da';
-        statusBadge.style.color = '#721c24';
-        statusBadge.textContent = '❌ Trình duyệt không hỗ trợ Web NFC (Cần Chrome Android).';
-        return;
-      }
-
-      try {
-        const ndef = new NDEFReader();
-        await ndef.scan();
-        isNfcStarted = true;
-
-        statusBadge.style.background = '#d4edda';
-        statusBadge.style.color = '#155724';
-        statusBadge.textContent = '🟢 CẢM BIẾN NFC & MÁY QUÉT QR ĐANG BẬT';
-
-        ndef.addEventListener("reading", async ({ serialNumber }) => {
-          if (serialNumber) {
-            await processCheckin({ uid: serialNumber }, false, 'Thẻ NFC');
-          }
-        });
-
-      } catch (error) {
-        statusBadge.textContent = `⚠️ Nhấn vào màn hình để bật NFC! (${error.message || error})`;
-      }
+    // 1. TỰ ĐỘNG KHÓA CON TRỎ MÁY TÍNH LUÔN LUÔN Ở Ô INPUT
+    function keepFocus() {
+      mssvInput.focus();
     }
+    
+    // Tự động giữ con trỏ ngay khi load trang, khi click bất kỳ đâu, hoặc khi ô input bị ngắt focus
+    window.addEventListener('load', keepFocus);
+    document.addEventListener('click', keepFocus);
+    mssvInput.addEventListener('blur', () => setTimeout(keepFocus, 10));
 
-    document.addEventListener('click', startNFCContinuous, { once: true });
-    document.addEventListener('touchstart', startNFCContinuous, { once: true });
-    scanBtn.addEventListener('click', startNFCContinuous);
-
-    // =======================================================
-    // LUỒNG 3: NHẬP THỦ CÔNG HOẶC MÁY QUÉT FOCUS VÀO INPUT
-    // =======================================================
-    manualForm.addEventListener('submit', async (e) => {
+    // 2. XỬ LÝ SỰ KIỆN KHI NHẤN ENTER (HOẶC MÁY QUÉT QR BẮN PHÍM ENTER)
+    checkinForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const mssv = mssvInput.value.trim();
       if (!mssv) return;
 
-      await processCheckin({ mssv: mssv }, true, 'Nhập thủ công / QR');
+      // Xóa ô nhập ngay lập tức để sẵn sàng nhận mã tiếp theo
+      mssvInput.value = '';
+
+      await processCheckin(mssv);
     });
 
-    // =======================================================
-    // HÀM GỬI API CHECK-IN CHUNG
-    // =======================================================
-    async function processCheckin(payload, isManual = false, methodType = '') {
+    // 3. HÀM GỬI API ĐIỂM DANH
+    async function processCheckin(mssv) {
       try {
         const response = await fetch(BACKEND_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ mssv: mssv })
         });
 
         const result = await response.json();
@@ -254,24 +131,25 @@
           resTitle.textContent = '🎉 Điểm Danh Thành Công!';
           resName.textContent = result.data.fullName;
           resMssv.textContent = result.data.mssv;
-          resMethod.textContent = methodType || result.data.method;
           resTime.textContent = result.data.timestamp;
           resultBox.style.display = 'block';
-
-          if (isManual) {
-            mssvInput.value = '';
-          }
         } else {
           resultBox.className = 'result-box error';
           resTitle.textContent = '❌ Thất Bại';
-          resName.textContent = 'Không tìm thấy';
-          resMssv.textContent = payload.mssv || 'N/A';
-          resMethod.textContent = methodType || (isManual ? 'QR/Thủ công' : 'Thẻ NFC');
+          resName.textContent = 'Không tìm thấy sinh viên';
+          resMssv.textContent = mssv;
           resTime.textContent = new Date().toLocaleTimeString('vi-VN');
           resultBox.style.display = 'block';
         }
       } catch (err) {
-        alert(`❌ Lỗi kết nối Backend API: ${err.message}`);
+        resultBox.className = 'result-box error';
+        resTitle.textContent = '❌ Lỗi Hệ Thống';
+        resName.textContent = err.message;
+        resMssv.textContent = mssv;
+        resTime.textContent = new Date().toLocaleTimeString('vi-VN');
+        resultBox.style.display = 'block';
+      } finally {
+        keepFocus(); // Đảm bảo con trỏ nhấp nháy lại ngay lập tức
       }
     }
   </script>
