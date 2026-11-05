@@ -105,6 +105,49 @@ app.get('/api/checkin', (req, res) => {
   });
 });
 
+// Danh sách các kết nối máy tính đang mở (SSE Clients)
+let clients = [];
+
+// API 1: Máy tính kết nối vào đây để chờ nhận dữ liệu Real-time
+app.get('/api/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Thêm client máy tính vào danh sách lắng nghe
+  clients.push(res);
+
+  req.on('close', () => {
+    clients = clients.filter(c => c !== res);
+  });
+});
+
+// API 2: Khi Điện thoại quét thẻ gửi POST lên, Server sẽ bắn dữ liệu cho Máy tính
+app.post('/api/checkin', (req, res) => {
+  const { uid, mssv } = req.body;
+  
+  // (Đoạn code tra cứu studentDatabase giữ nguyên...)
+  const student = studentDatabase[uid] || Object.values(studentDatabase).find(s => s.mssv === mssv);
+
+  if (!student) {
+    return res.status(404).json({ success: false, message: "Không tìm thấy sinh viên!" });
+  }
+
+  const logEntry = {
+    uid: uid || 'N/A',
+    mssv: student.mssv,
+    fullName: student.fullName,
+    timestamp: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+  };
+
+  // 💥 BẮN DỮ LIỆU ĐIỂM DANH SANG MÁY TÍNH NGAY LẬP TỨC
+  clients.forEach(client => {
+    client.write(`data: ${JSON.stringify(logEntry)}\n\n`);
+  });
+
+  return res.json({ success: true, message: "Đã điểm danh!", data: logEntry });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend API đang chạy tại http://localhost:${PORT}`);

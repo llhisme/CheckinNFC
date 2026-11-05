@@ -31,9 +31,18 @@
       box-sizing: border-box;
     }
     .btn-primary { background-color: #007bff; }
-    .btn-primary:active { background-color: #0056b3; }
     .btn-success { background-color: #28a745; margin-top: 10px; }
-    .btn-success:active { background-color: #1e7e34; }
+
+    .status-badge {
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
 
     .divider {
       margin: 20px 0;
@@ -43,9 +52,7 @@
     .divider::before {
       content: "";
       position: absolute;
-      top: 50%;
-      left: 0;
-      right: 0;
+      top: 50%; left: 0; right: 0;
       height: 1px;
       background: #ddd;
       z-index: 1;
@@ -70,7 +77,6 @@
       text-align: center;
     }
 
-    /* Khung kết quả hiển thị sinh viên */
     .result-box {
       margin-top: 20px;
       padding: 16px;
@@ -78,22 +84,8 @@
       text-align: left;
       display: none;
     }
-    .result-box.success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    .result-box.error {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-    .status-text {
-      margin-top: 15px;
-      font-size: 13px;
-      color: #6c757d;
-    }
+    .result-box.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .result-box.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
   </style>
 </head>
 <body>
@@ -101,19 +93,23 @@
   <div class="card">
     <h2>Điểm Danh Sinh Viên</h2>
 
-    <!-- PHƯƠNG THỨC 1: QUÉT THẺ NFC -->
-    <button id="scanBtn" class="btn btn-primary">📲 Chạm Thẻ NFC Điểm Danh</button>
-    <div id="statusText" class="status-text">Bấm nút trên để khởi động cảm biến NFC</div>
+    <!-- THANH TRẠNG THÁI NFC -->
+    <div id="statusBadge" class="status-badge">
+      👆 Chạm vào màn hình 1 lần để bật cảm biến NFC
+    </div>
 
-    <div class="divider"><span>HOẶC</span></div>
+    <!-- PHƯƠNG THỨC 1: QUÉT NFC -->
+    <button id="scanBtn" class="btn btn-primary">📲 Bật Cảm Biến NFC</button>
 
-    <!-- PHƯƠNG THỨC 2: NHẬP MSSV THỦ CÔNG -->
+    <div class="divider"><span>HOẶC NHẬP THỦ CÔNG</span></div>
+
+    <!-- PHƯƠNG THỨC 2: NHẬP MSSV THỦ CÔNG (ĐÃ ĐƯỢC GIỮ LẠI) -->
     <form id="manualForm">
-      <input type="text" id="mssvInput" placeholder="Nhập MSSV (VD: 2280619040)" required>
+      <input type="text" id="mssvInput" placeholder="Nhập MSSV (VD: 2280619040)" required autocomplete="off">
       <button type="submit" class="btn btn-success">✅ Check-in Bằng MSSV</button>
     </form>
 
-    <!-- KHUNG HIỂN THỊ KẾT QUẢ CHECK-IN -->
+    <!-- KHUNG KẾT QUẢ KHI ĐIỂM DANH -->
     <div id="resultBox" class="result-box">
       <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
       <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
@@ -124,11 +120,11 @@
   </div>
 
   <script>
-    // ⚙️ URL API Backend của bạn trên Railway/Render
-    const BACKEND_URL = 'https://checkinnfc-production.up.railway.app/api/checkin';
+    // ⚙️ URL API Backend trên Railway/Render của bạn
+    const BACKEND_URL = 'https://nfc-backend-production-xxxx.up.railway.app/api/checkin';
 
+    const statusBadge = document.getElementById('statusBadge');
     const scanBtn = document.getElementById('scanBtn');
-    const statusText = document.getElementById('statusText');
     const manualForm = document.getElementById('manualForm');
     const mssvInput = document.getElementById('mssvInput');
 
@@ -139,49 +135,57 @@
     const resMethod = document.getElementById('resMethod');
     const resTime = document.getElementById('resTime');
 
-    // ==========================================
-    // LUỒNG 1: QUÉT THẺ NFC (HOÀN TOÀN ĐỘC LẬP)
-    // ==========================================
-    scanBtn.addEventListener('click', async () => {
+    let isNfcStarted = false;
+
+    // 1. HÀM KÍCH HOẠT CẢM BIẾN NFC BẬT LIÊN TỤC
+    async function startNFCContinuous() {
+      if (isNfcStarted) return;
+
       if (!('NDEFReader' in window)) {
-        statusText.textContent = '❌ Trình duyệt không hỗ trợ Web NFC (Cần Chrome Android).';
+        statusBadge.style.background = '#f8d7da';
+        statusBadge.style.color = '#721c24';
+        statusBadge.textContent = '❌ Trình duyệt không hỗ trợ Web NFC (Cần Chrome Android).';
         return;
       }
 
       try {
-        statusText.textContent = '⏳ Đang bật NFC... Chạm thẻ vào mặt lưng!';
-
         const ndef = new NDEFReader();
         await ndef.scan();
+        isNfcStarted = true;
 
+        statusBadge.style.background = '#d4edda';
+        statusBadge.style.color = '#155724';
+        statusBadge.textContent = '🟢 NFC ĐANG BẬT LIÊN TỤC - Chạm thẻ vào mặt lưng!';
+
+        // Lắng nghe quét thẻ ngầm liên tục
         ndef.addEventListener("reading", async ({ serialNumber }) => {
           if (serialNumber) {
-            statusText.textContent = `💳 Đã quét thẻ NFC (UID: ${serialNumber})`;
-            // Gửi request NFC, tham số isManual = false (Không đụng đến ô MSSV)
+            // parameter isManual = false -> Quét NFC ngầm sẽ KHÔNG xóa ô gõ MSSV
             await processCheckin({ uid: serialNumber }, false);
           }
         });
-      } catch (error) {
-        statusText.textContent = `❌ Lỗi: ${error.message || error}`;
-      }
-    });
 
-    // ==========================================
-    // LUỒNG 2: NHẬP MSSV THỦ CÔNG
-    // ==========================================
+      } catch (error) {
+        statusBadge.textContent = `⚠️ Nhấn vào màn hình để bật NFC! (${error.message || error})`;
+      }
+    }
+
+    // Tự động kích hoạt NFC khi người dùng chạm bất kỳ đâu trên màn hình lần đầu
+    document.addEventListener('click', startNFCContinuous, { once: true });
+    document.addEventListener('touchstart', startNFCContinuous, { once: true });
+    scanBtn.addEventListener('click', startNFCContinuous);
+
+    // 2. CHECK-IN BẰNG CÁCH NHẬP MSSV THỦ CÔNG
     manualForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const mssv = mssvInput.value.trim();
       if (!mssv) return;
 
-      statusText.textContent = `⏳ Đang kiểm tra MSSV ${mssv}...`;
-      // Gửi request thủ công, tham số isManual = true
+      // parameter isManual = true
       await processCheckin({ mssv: mssv }, true);
     });
 
-    // ==========================================
-    // HÀM XỬ LÝ CHECK-IN CHUNG
-    // ==========================================
+    // 3. HÀM XỬ LÝ KẾT NỐI API CHUNG
     async function processCheckin(payload, isManual = false) {
       try {
         const response = await fetch(BACKEND_URL, {
@@ -201,9 +205,7 @@
           resTime.textContent = result.data.timestamp;
           resultBox.style.display = 'block';
 
-          statusText.textContent = '✅ Đã ghi nhận điểm danh!';
-
-          // CHỈ XÓA Ô NHẬP NẾU ĐÂY LÀ LƯỢT CHECK-IN THỦ CÔNG
+          // Chỉ xóa nội dung ô gõ nếu lượt điểm danh thành công đến từ THỦ CÔNG
           if (isManual) {
             mssvInput.value = '';
           }
@@ -215,11 +217,9 @@
           resMethod.textContent = isManual ? 'Thủ công' : 'Thẻ NFC';
           resTime.textContent = new Date().toLocaleTimeString('vi-VN');
           resultBox.style.display = 'block';
-
-          statusText.textContent = `⚠️ ${result.message}`;
         }
       } catch (err) {
-        statusText.textContent = `❌ Lỗi kết nối Server: ${err.message}`;
+        alert(`❌ Lỗi kết nối Backend API: ${err.message}`);
       }
     }
   </script>
