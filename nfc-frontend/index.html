@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hệ Thống Điểm Danh Sinh Viên</title>
+  <title>Hệ Thống Điểm Danh Sinh Viên - WebHID API</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -17,16 +17,28 @@
       border-radius: 12px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       max-width: 420px;
-      margin: 40px auto 0 auto;
+      margin: 20px auto 0 auto;
     }
-    h2 {
-      margin-top: 0;
-      color: #333;
-    }
-    .hint-text {
+    .btn-connect {
+      background-color: #17a2b8;
+      color: white;
+      border: none;
+      padding: 10px 16px;
       font-size: 14px;
-      color: #6c757d;
-      margin-bottom: 20px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    .status-badge {
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      background: #e2e3e5;
+      color: #383d41;
     }
     input[type="text"] {
       width: 100%;
@@ -37,11 +49,6 @@
       box-sizing: border-box;
       text-align: center;
       outline: none;
-      box-shadow: 0 0 8px rgba(0, 123, 255, 0.25);
-    }
-    input[type="text"]:focus {
-      border-color: #0056b3;
-      box-shadow: 0 0 10px rgba(0, 86, 179, 0.4);
     }
     .result-box {
       margin-top: 20px;
@@ -58,20 +65,23 @@
 
   <div class="card">
     <h2>Điểm Danh Sinh Viên</h2>
-    <p class="hint-text">Quét mã QR hoặc Nhập MSSV rồi nhấn <strong>ENTER</strong></p>
 
-    <!-- FORM CHỈ CHỨA Ô INPUT (KHÔNG NÚT BẤM) -->
+    <!-- THÔNG BÁO TRẠNG THÁI WEBHID -->
+    <div id="statusBadge" class="status-badge">⚪ Chưa kết nối Máy quét USB qua WebHID</div>
+    <button id="connectHidBtn" class="btn-connect">🔌 Kết nối Máy Quét QR USB</button>
+
+    <!-- FORM NHẬP THỦ CÔNG -->
     <form id="checkinForm">
       <input 
         type="text" 
         id="mssvInput" 
-        placeholder="Nhập MSSV / Quét QR..." 
+        placeholder="Nhập MSSV thủ công tại đây..." 
         autocomplete="off"
         autofocus
       >
     </form>
 
-    <!-- KHUNG KẾT QUẢ KHI ĐIỂM DANH -->
+    <!-- KẾT QUẢ ĐIỂM DANH -->
     <div id="resultBox" class="result-box">
       <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
       <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
@@ -82,9 +92,10 @@
   </div>
 
   <script>
-    // ⚙️ URL API Backend trên Railway của bạn
-    const BACKEND_URL = 'https://checkinnfc-production.up.railway.app/api/checkin';
+    const BACKEND_URL = 'https://nfc-backend-production-xxxx.up.railway.app/api/checkin';
 
+    const connectHidBtn = document.getElementById('connectHidBtn');
+    const statusBadge = document.getElementById('statusBadge');
     const checkinForm = document.getElementById('checkinForm');
     const mssvInput = document.getElementById('mssvInput');
 
@@ -95,70 +106,113 @@
     const resMethod = document.getElementById('resMethod');
     const resTime = document.getElementById('resTime');
 
-    // 1. GIỮ CON TRỎ MÁY TÍNH LUÔN LUÔN NHẤP NHÁY TRONG Ô INPUT
-    function keepFocus() {
-      mssvInput.focus();
-    }
+    // Giữ con trỏ nhấp nháy liên tục ở ô gõ MSSV thủ công
+    function keepFocus() { mssvInput.focus(); }
     window.addEventListener('load', keepFocus);
     document.addEventListener('click', keepFocus);
-    mssvInput.addEventListener('blur', () => setTimeout(keepFocus, 10));
 
-    // 2. BỘ CHẶN TỐC ĐỘ GÕ ĐỂ TÁCH BIỆT MÁY QUÉT QR VÀ NHẬP THỦ CÔNG
-    let qrBuffer = '';
-    let lastKeyTime = 0;
-    let lastKeyChar = '';
+    // =======================================================
+    // BẢNG ÁNH XẠ MÃ HEX USB HID USAGE (PAGE 0x07) SANG CHỮ/SỐ
+    // =======================================================
+    const HID_KEY_MAP = {
+      0x1E: '1', 0x1F: '2', 0x20: '3', 0x21: '4', 0x22: '5',
+      0x23: '6', 0x24: '7', 0x25: '8', 0x26: '9', 0x27: '0',
+      0x04: 'A', 0x05: 'B', 0x06: 'C', 0x07: 'D', 0x08: 'E', 0x09: 'F',
+      0x0A: 'G', 0x0B: 'H', 0x0C: 'I', 0x0D: 'J', 0x0E: 'K', 0x0F: 'L',
+      0x10: 'M', 0x11: 'N', 0x12: 'O', 0x13: 'P', 0x14: 'Q', 0x15: 'R',
+      0x16: 'S', 0x17: 'T', 0x18: 'U', 0x19: 'V', 0x1A: 'W', 0x1B: 'X',
+      0x1C: 'Y', 0x1D: 'Z'
+    };
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key.length !== 1) return;
+    let hidDevice = null;
+    let hidBuffer = '';
+    let lastProcessedKey = 0;
 
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTime;
-      lastKeyTime = currentTime;
-
-      // Nếu tốc độ phát tín hiệu phím < 35ms -> Đây là máy quét QR ngoại vi
-      if (timeDiff < 35) {
-        // Thu hồi ký tự đầu tiên nếu trót lỡ nhảy vào ô mssvInput
-        if (qrBuffer.length === 0 && lastKeyChar) {
-          qrBuffer += lastKeyChar;
-          if (mssvInput.value.endsWith(lastKeyChar)) {
-            mssvInput.value = mssvInput.value.slice(0, -1);
-          }
-        }
-
-        // Chặn máy quét rải chữ vào ô input đang gõ dở
-        e.preventDefault();
-
-        if (e.key === 'Enter') {
-          if (qrBuffer.length >= 3) {
-            const scannedMssv = qrBuffer;
-            qrBuffer = '';
-            lastKeyChar = '';
-            // Gửi API điểm danh QR độc lập (clearInput = false để không xóa ô gõ dở)
-            processCheckin(scannedMssv, 'Máy quét QR', false);
-          }
-        } else {
-          qrBuffer += e.key;
-        }
-      } else {
-        // Người dùng gõ tay bình thường
-        if (timeDiff > 150) {
-          qrBuffer = '';
-        }
-        lastKeyChar = e.key;
+    // =======================================================
+    // KẾT NỐI MÁY QUÉT MÃ QR QUA WEBHID API
+    // =======================================================
+    connectHidBtn.addEventListener('click', async () => {
+      if (!('hid' in navigator)) {
+        alert('Trình duyệt không hỗ trợ WebHID! Vui lòng dùng Chrome hoặc Edge trên máy tính.');
+        return;
       }
-    }, true); // Dùng capture phase để chặn sự kiện bàn phím kịp thời
 
-    // 3. XỬ LÝ NHẬP THỦ CÔNG KHI BẤM ENTER
+      try {
+        // Yêu cầu cấp quyền chọn máy quét USB
+        const devices = await navigator.hid.requestDevice({ filters: [] });
+        if (devices.length === 0) return;
+
+        hidDevice = devices[0];
+        await hidDevice.open();
+
+        statusBadge.style.background = '#d4edda';
+        statusBadge.style.color = '#155724';
+        statusBadge.textContent = `🟢 Đã kết nối ngầm: ${hidDevice.productName || 'Máy quét QR USB'}`;
+        connectHidBtn.style.display = 'none'; // Ẩn nút sau khi kết nối thành công
+
+        // 💥 LẮNG NGHE DỮ LIỆU TỪ CỔNG USB NGOẠI VI (KHÔNG QUA BÀN PHÍM OS)
+        hidDevice.addEventListener('inputreport', (event) => {
+          const { data } = event; // DataView 8 bytes của USB HID Report
+          if (data.byteLength < 3) return;
+
+          const keyCode = data.getUint8(2); // Byte số 2 chứa mã phím HID
+
+          // Bỏ qua khi nhả phím (Key release = 0) hoặc ký tự lặp
+          if (keyCode === 0) {
+            lastProcessedKey = 0;
+            return;
+          }
+          if (keyCode === lastProcessedKey) return;
+          lastProcessedKey = keyCode;
+
+          // 0x28 = Phím Enter trong chuẩn USB HID
+          if (keyCode === 0x28) {
+            if (hidBuffer.length > 0) {
+              const scannedMssv = hidBuffer;
+              hidBuffer = '';
+              // Điểm danh ngầm, tham số clearInput = false (Không đụng đến ô đang gõ dở)
+              processCheckin(scannedMssv, 'Máy quét QR (WebHID Direct)', false);
+            }
+          } else if (HID_KEY_MAP[keyCode]) {
+            hidBuffer += HID_KEY_MAP[keyCode];
+          }
+        });
+
+      } catch (err) {
+        alert(`❌ Lỗi kết nối WebHID: ${err.message}`);
+      }
+    });
+
+    // Tự động kết nối lại nếu thiết bị đã từng được cấp quyền trước đó
+    window.addEventListener('DOMContentLoaded', async () => {
+      if ('hid' in navigator) {
+        const existingDevices = await navigator.hid.getDevices();
+        if (existingDevices.length > 0) {
+          hidDevice = existingDevices[0];
+          await hidDevice.open();
+          statusBadge.style.background = '#d4edda';
+          statusBadge.style.color = '#155724';
+          statusBadge.textContent = `🟢 Đã tự động kết nối: ${hidDevice.productName || 'Máy quét QR USB'}`;
+          connectHidBtn.style.display = 'none';
+        }
+      }
+    });
+
+    // =======================================================
+    // LUỒNG 2: NHẬP THỦ CÔNG BẰNG BÀN PHÍM BÌNH THƯỜNG
+    // =======================================================
     checkinForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const mssv = mssvInput.value.trim();
       if (!mssv) return;
 
-      // Gửi API thủ công -> clearInput = true để xóa sạch ô sau khi gửi xong
+      // Điểm danh thủ công -> clearInput = true để xóa sạch ô gõ sau khi xong
       await processCheckin(mssv, 'Nhập thủ công', true);
     });
 
-    // 4. HÀM GỬI API CHECK-IN CHUNG
+    // =======================================================
+    // HÀM GỬI API CHECK-IN CHUNG
+    // =======================================================
     async function processCheckin(mssv, method, clearInput = true) {
       try {
         const response = await fetch(BACKEND_URL, {
@@ -198,7 +252,7 @@
         if (clearInput) {
           mssvInput.value = '';
         }
-        keepFocus(); // Đảm bảo con trỏ chuột luôn quay lại nhấp nháy trong ô input
+        keepFocus();
       }
     }
   </script>
