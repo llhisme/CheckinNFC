@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Đọc Tất Cả Dữ Liệu Thẻ NFC</title>
+  <title>Hệ Thống Điểm Danh Sinh Viên</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -16,60 +16,80 @@
       padding: 24px;
       border-radius: 12px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      max-width: 480px;
+      max-width: 400px;
       margin: 0 auto;
     }
-    button {
+    .btn {
       padding: 14px 28px;
       font-size: 16px;
       font-weight: bold;
-      background-color: #007bff;
       color: white;
       border: none;
       border-radius: 8px;
       cursor: pointer;
       width: 100%;
+      box-sizing: border-box;
     }
-    button:active { background-color: #0056b3; }
-    
-    /* Vùng hiển thị toàn bộ thông tin đọc được */
-    .info-container {
+    .btn-primary { background-color: #007bff; }
+    .btn-primary:active { background-color: #0056b3; }
+    .btn-success { background-color: #28a745; margin-top: 10px; }
+    .btn-success:active { background-color: #1e7e34; }
+
+    .divider {
+      margin: 20px 0;
+      position: relative;
+      text-align: center;
+    }
+    .divider::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #ddd;
+      z-index: 1;
+    }
+    .divider span {
+      background: white;
+      padding: 0 12px;
+      position: relative;
+      z-index: 2;
+      color: #6c757d;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      font-size: 15px;
+      border: 1px solid #ced4da;
+      border-radius: 8px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    /* Khung kết quả hiển thị sinh viên */
+    .result-box {
       margin-top: 20px;
+      padding: 16px;
+      border-radius: 8px;
       text-align: left;
       display: none;
     }
-    .info-group {
-      background: #eef2f7;
-      border: 1px solid #ced4da;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 12px;
+    .result-box.success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
     }
-    .info-group h4 {
-      margin: 0 0 8px 0;
-      color: #007bff;
-      font-size: 15px;
-      border-bottom: 1px dashed #bbb;
-      padding-bottom: 4px;
+    .result-box.error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
     }
-    .info-row {
-      margin: 6px 0;
-      font-size: 14px;
-      word-break: break-all;
-    }
-    .info-row strong {
-      color: #333;
-    }
-    .tag-hex {
-      font-family: monospace;
-      background: #fff;
-      padding: 4px 6px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      font-size: 12px;
-      color: #d63384;
-    }
-    .status-log {
+
+    .status-text {
       margin-top: 15px;
       font-size: 13px;
       color: #6c757d;
@@ -79,156 +99,116 @@
 <body>
 
   <div class="card">
-    <h2>NFC Full Data Reader</h2>
-    <p>Chạm thẻ vào mặt lưng điện thoại để đọc toàn bộ dữ liệu chip & NDEF.</p>
-    <button id="scanBtn">Bắt đầu quét NFC</button>
-    <div id="statusLog" class="status-log">Trạng thái: Sẵn sàng quét...</div>
+    <h2>Điểm Danh Sinh Viên</h2>
 
-    <!-- KHUNG HIỂN THỊ TOÀN BỘ THÔNG TIN THẺ -->
-    <div id="infoContainer" class="info-container">
-      
-      <!-- 1. Thông tin phần cứng thẻ -->
-      <div class="info-group">
-        <h4>💳 1. THÔNG TIN PHẦN CỨNG THẺ (HARDWARE)</h4>
-        <div class="info-row"><strong>Mã UID (Serial Number):</strong> <span id="uidVal" class="tag-hex">--</span></div>
-        <div class="info-row"><strong>Số bản ghi NDEF:</strong> <span id="recordCountVal">0</span></div>
-      </div>
+    <!-- PHƯƠNG THỨC 1: QUÉT THẺ NFC -->
+    <button id="scanBtn" class="btn btn-primary">📲 Chạm Thẻ NFC Điểm Danh</button>
+    <div id="statusText" class="status-text">Bấm nút trên để khởi động cảm biến NFC</div>
 
-      <!-- 2. Thông tin nội dung dữ liệu NDEF (Nếu có) -->
-      <div class="info-group">
-        <h4>📦 2. NỘI DUNG DỮ LIỆU BỘ NHỚ (NDEF RECORDS)</h4>
-        <div id="recordsList">Vui lòng quét thẻ...</div>
-      </div>
+    <div class="divider"><span>HOẶC</span></div>
 
-      <!-- 3. Kết quả đối chiếu với Backend điểm danh -->
-      <div class="info-group">
-        <h4>🔍 3. KẾT QUẢ ĐỐI CHIẾU CƠ SỞ DỮ LIỆU</h4>
-        <div class="info-row"><strong>Họ và tên:</strong> <span id="dbName">--</span></div>
-        <div class="info-row"><strong>MSSV:</strong> <span id="dbMssv">--</span></div>
-        <div class="info-row"><strong>Trạng thái:</strong> <span id="dbStatus">--</span></div>
-      </div>
+    <!-- PHƯƠNG THỨC 2: NHẬP MSSV THỦ CÔNG -->
+    <form id="manualForm">
+      <input type="text" id="mssvInput" placeholder="Nhập MSSV (VD: 2280619040)" required>
+      <button type="submit" class="btn btn-success">✅ Check-in Bằng MSSV</button>
+    </form>
 
+    <!-- KHUNG HIỂN THỊ KẾT QUẢ CHECK-IN -->
+    <div id="resultBox" class="result-box">
+      <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
+      <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
+      <p style="margin: 5px 0;"><strong>MSSV:</strong> <span id="resMssv"></span></p>
+      <p style="margin: 5px 0;"><strong>Hình thức:</strong> <span id="resMethod"></span></p>
+      <p style="margin: 5px 0;"><strong>Thời gian:</strong> <span id="resTime"></span></p>
     </div>
   </div>
 
   <script>
-    // ⚙️ THAY BẰNG URL BACKEND RAILWAY CỦA BẠN
-    const BACKEND_URL = 'https://checkinnfc-production.up.railway.app/api/checkin';
+    // ⚙️ URL API Backend của bạn trên Railway/Render
+    const BACKEND_URL = 'https://nfc-backend-production-xxxx.up.railway.app/api/checkin';
 
     const scanBtn = document.getElementById('scanBtn');
-    const statusLog = document.getElementById('statusLog');
-    const infoContainer = document.getElementById('infoContainer');
-    
-    const uidVal = document.getElementById('uidVal');
-    const recordCountVal = document.getElementById('recordCountVal');
-    const recordsList = document.getElementById('recordsList');
-    const dbName = document.getElementById('dbName');
-    const dbMssv = document.getElementById('dbMssv');
-    const dbStatus = document.getElementById('dbStatus');
+    const statusText = document.getElementById('statusText');
+    const manualForm = document.getElementById('manualForm');
+    const mssvInput = document.getElementById('mssvInput');
 
+    const resultBox = document.getElementById('resultBox');
+    const resTitle = document.getElementById('resTitle');
+    const resName = document.getElementById('resName');
+    const resMssv = document.getElementById('resMssv');
+    const resMethod = document.getElementById('resMethod');
+    const resTime = document.getElementById('resTime');
+
+    // 1. Xử lý quét thẻ NFC
     scanBtn.addEventListener('click', async () => {
       if (!('NDEFReader' in window)) {
-        statusLog.textContent = '❌ Trình duyệt hoặc thiết bị này không hỗ trợ Web NFC (Cần Chrome trên Android).';
+        statusText.textContent = '❌ Trình duyệt không hỗ trợ Web NFC (Cần Chrome Android).';
         return;
       }
 
       try {
-        statusLog.textContent = '⏳ Đang khởi tạo cảm biến NFC...';
-        infoContainer.style.display = 'none';
+        statusText.textContent = '⏳ Đang bật NFC... Chạm thẻ vào mặt lưng!';
+        resultBox.style.display = 'none';
 
         const ndef = new NDEFReader();
         await ndef.scan();
-        statusLog.textContent = '✅ Cảm biến NFC đang bật! Vui lòng chạm thẻ vào mặt lưng...';
 
-        ndef.addEventListener("readingerror", () => {
-          statusLog.textContent = '⚠️ Không thể đọc được thẻ. Vui lòng giữ yên thẻ ở mặt lưng!';
-        });
-
-        // XỬ LÝ ĐỌC TOÀN BỘ DỮ LIỆU THẺ
-        ndef.addEventListener("reading", async ({ message, serialNumber }) => {
-          statusLog.textContent = '🎉 Đã quét thành công!';
-          infoContainer.style.display = 'block';
-
-          // 1. Hiển thị UID phần cứng
-          uidVal.textContent = serialNumber || 'Không thể lấy UID';
-          recordCountVal.textContent = message.records.length;
-
-          // 2. Hiển thị toàn bộ các NDEF Record trong thẻ
-          recordsList.innerHTML = ''; // Xóa dữ liệu cũ
-
-          if (message.records.length === 0) {
-            recordsList.innerHTML = '<div class="info-row" style="color: #6c757d;"><i>Thẻ này là thẻ trắng hoặc thẻ bảo mật (không chứa bản ghi NDEF chữ/URL).</i></div>';
-          } else {
-            const textDecoder = new TextDecoder();
-
-            message.records.forEach((record, index) => {
-              let recordHtml = `<div style="background: white; padding: 8px; border-radius: 6px; margin-top: 6px; border: 1px solid #dee2e6;">`;
-              recordHtml += `<div class="info-row"><strong>Bản ghi #${index + 1}:</strong></div>`;
-              recordHtml += `<div class="info-row">• <strong>Record Type:</strong> <code>${record.recordType}</code></div>`;
-              
-              if (record.mediaType) {
-                recordHtml += `<div class="info-row">• <strong>MIME Type:</strong> ${record.mediaType}</div>`;
-              }
-
-              if (record.data) {
-                recordHtml += `<div class="info-row">• <strong>Kích thước:</strong> ${record.data.byteLength} bytes</div>`;
-                
-                // Giải mã chữ (Text UTF-8)
-                try {
-                  const textContent = textDecoder.decode(record.data);
-                  recordHtml += `<div class="info-row">• <strong>Nội dung chữ (Text):</strong> <span style="color: #28a745; font-weight: bold;">"${textContent}"</span></div>`;
-                } catch (e) {
-                  recordHtml += `<div class="info-row">• <strong>Nội dung chữ:</strong> [Không phải định dạng UTF-8]</div>`;
-                }
-
-                // Chuyển mảng Byte sang chuỗi HEX
-                const byteArray = new Uint8Array(record.data.buffer);
-                const hexArray = Array.from(byteArray).map(b => b.toString(16).padStart(2, '0').toUpperCase());
-                recordHtml += `<div class="info-row">• <strong>Mã Byte HEX thô:</strong> <br><span class="tag-hex">${hexArray.join(' ')}</span></div>`;
-              }
-
-              recordHtml += `</div>`;
-              recordsList.innerHTML += recordHtml;
-            });
-          }
-
-          // 3. Tra cứu UID trên Backend Database
+        ndef.addEventListener("reading", async ({ serialNumber }) => {
           if (serialNumber) {
-            await queryBackend(serialNumber);
+            statusText.textContent = `💳 Đã quét được thẻ (UID: ${serialNumber})`;
+            await processCheckin({ uid: serialNumber });
           }
         });
-
       } catch (error) {
-        statusLog.textContent = `❌ Lỗi NFC: ${error.message || error}`;
+        statusText.textContent = `❌ Lỗi: ${error.message || error}`;
       }
     });
 
-    // Hàm gọi API Backend để hiển thị tên và MSSV
-    async function queryBackend(uid) {
-      dbName.textContent = 'Đang tra cứu...';
-      dbMssv.textContent = 'Đang tra cứu...';
-      dbStatus.textContent = 'Đang kết nối Server...';
+    // 2. Xử lý nhập MSSV thủ công
+    manualForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mssv = mssvInput.value.trim();
+      if (!mssv) return;
 
+      statusText.textContent = `⏳ Đang kiểm tra MSSV ${mssv}...`;
+      await processCheckin({ mssv: mssv });
+    });
+
+    // 3. Hàm gửi request Check-in chung (dùng cho cả NFC và MSSV)
+    async function processCheckin(payload) {
       try {
         const response = await fetch(BACKEND_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: uid })
+          body: JSON.stringify(payload)
         });
 
         const result = await response.json();
 
         if (result.success) {
-          dbName.textContent = result.data.fullName;
-          dbMssv.textContent = result.data.mssv;
-          dbStatus.innerHTML = '<span style="color: green; font-weight: bold;">✅ Tìm thấy sinh viên</span>';
+          resultBox.className = 'result-box success';
+          resTitle.textContent = '🎉 Điểm Danh Thành Công!';
+          resName.textContent = result.data.fullName;
+          resMssv.textContent = result.data.mssv;
+          resMethod.textContent = result.data.method || (payload.uid ? 'Thẻ NFC' : 'Thủ công');
+          resTime.textContent = result.data.timestamp;
+          resultBox.style.display = 'block';
+
+          statusText.textContent = '✅ Đã ghi nhận điểm danh!';
+          mssvInput.value = ''; // Xóa ô nhập sau khi thành công
         } else {
-          dbName.textContent = 'Chưa có dữ liệu';
-          dbMssv.textContent = 'N/A';
-          dbStatus.innerHTML = `<span style="color: red; font-weight: bold;">❌ ${result.message}</span>`;
+          resultBox.className = 'result-box error';
+          resTitle.textContent = '❌ Thất Bại';
+          resName.textContent = 'Không tìm thấy';
+          resMssv.textContent = payload.mssv || 'N/A';
+          resMethod.textContent = payload.uid ? 'Thẻ NFC' : 'Thủ công';
+          resTime.textContent = new Date().toLocaleTimeString('vi-VN');
+          resultBox.style.display = 'block';
+
+          statusText.textContent = `⚠️ ${result.message}`;
         }
       } catch (err) {
-        dbStatus.innerHTML = `<span style="color: orange;">⚠️ Lỗi kết nối Backend: ${err.message}</span>`;
+        statusText.textContent = `❌ Lỗi kết nối Server: ${err.message}`;
       }
     }
   </script>
