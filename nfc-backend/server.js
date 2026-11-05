@@ -20,32 +20,41 @@ const checkinLogs = [];
  * Body: { "uid": "e3:cb:42:e3" }
  */
 app.post('/api/checkin', (req, res) => {
-  const { uid } = req.body;
+  const { uid, mssv } = req.body;
 
-  if (!uid) {
-    return res.status(400).json({ success: false, message: "Thiếu dữ liệu UID thẻ." });
+  let student = null;
+  let methodUsed = '';
+
+  // 1. Trường hợp check-in bằng thẻ NFC (dựa vào UID)
+  if (uid) {
+    student = studentDatabase[uid];
+    methodUsed = 'Thẻ NFC';
+  } 
+  // 2. Trường hợp check-in bằng MSSV nhập thủ công
+  else if (mssv) {
+    student = Object.values(studentDatabase).find(s => s.mssv === mssv);
+    methodUsed = 'Nhập MSSV thủ công';
   }
 
-  // Tra cứu UID trong cơ sở dữ liệu
-  const student = studentDatabase[uid];
-
+  // Nếu không tìm thấy thông tin sinh viên
   if (!student) {
     return res.status(404).json({
       success: false,
-      message: `Thẻ chưa được đăng ký trong hệ thống! (UID: ${uid})`
+      message: uid ? `Thẻ chưa đăng ký (UID: ${uid})` : `Mã số sinh viên ${mssv} không tồn tại!`
     });
   }
 
-  // Ghi lại thông tin check-in
+  // Lưu lịch sử điểm danh
   const logEntry = {
-    uid,
+    uid: uid || 'N/A',
     mssv: student.mssv,
     fullName: student.fullName,
+    method: methodUsed,
     timestamp: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
   };
-  checkinLogs.unshift(logEntry); // Đưa bản ghi mới nhất lên đầu
 
-  console.log(`[CHECK-IN SUCCESS] ${logEntry.timestamp} - ${student.fullName} (${student.mssv})`);
+  checkinLogs.unshift(logEntry);
+  console.log(`[CHECK-IN SUCCESS] ${logEntry.timestamp} - ${student.fullName} (${student.mssv}) qua ${methodUsed}`);
 
   return res.json({
     success: true,
