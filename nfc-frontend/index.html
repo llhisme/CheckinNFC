@@ -122,14 +122,59 @@
         });
 
         // 2. Khi quét thành công UID thẻ
-        ndef.addEventListener("reading", async ({ serialNumber }) => {
-          const uid = serialNumber;
-          logDiv.textContent = `💳 Đã đọc UID: ${uid}\n⏳ Đang đối chiếu với cơ sở dữ liệu...`;
+        ndef.addEventListener("reading", async ({ message, serialNumber }) => {
+          // 1. In tiêu đề Debug
+          log("\n==========================================");
+          log(`🔍 [DEBUG NFC SCAN] - ${new Date().toLocaleTimeString('vi-VN')}`);
+          log(`------------------------------------------`);
           
-          // Gửi UID lên Server Backend để tra cứu thông tin sinh viên
-          await checkinStudent(uid);
-        });
+          // 2. Đọc mã UID phần cứng của thẻ (Hardware Serial Number)
+          log(`💳 Mã UID thẻ (Serial Number): ${serialNumber || 'Không thể lấy UID'}`);
+          log(`📦 Số lượng bản ghi NDEF (Records): ${message.records.length}`);
 
+          // 3. Nếu thẻ không có dữ liệu NDEF (Thẻ trắng hoặc thẻ bị khóa)
+          if (message.records.length === 0) {
+            log(`ℹ️ Ghi chú: Thẻ trống hoặc sử dụng định dạng riêng (chỉ đọc được UID phần cứng để điểm danh).`);
+          } else {
+            // 4. Duyệt qua và đọc chi tiết từng NDEF Record có trong thẻ
+            const textDecoder = new TextDecoder();
+
+            message.records.forEach((record, index) => {
+              log(`\n--- Bản ghi NDEF #${index + 1} ---`);
+              log(`• Loại bản ghi (Record Type): ${record.recordType}`);
+              if (record.mediaType) log(`• Kiểu MIME (Media Type): ${record.mediaType}`);
+              if (record.id) log(`• Record ID: ${record.id}`);
+              if (record.encoding) log(`• Chuẩn mã hóa: ${record.encoding}`);
+              if (record.lang) log(`• Ngôn ngữ: ${record.lang}`);
+
+              // Giải mã Payload / Data
+              if (record.data) {
+                log(`• Kích thước Data: ${record.data.byteLength} bytes`);
+
+                // 解码 1: Chuỗi văn bản (UTF-8 Text)
+                try {
+                  const decodedText = textDecoder.decode(record.data);
+                  log(`• Dữ liệu chữ (Decoded Text): "${decodedText}"`);
+                } catch (e) {
+                  log(`• Dữ liệu chữ: [Không phải chuẩn UTF-8]`);
+                }
+
+                // 解码 2: Dữ liệu Byte thô mã HEX (Raw Hex Bytes)
+                const byteArray = new Uint8Array(record.data.buffer);
+                const hexArray = Array.from(byteArray).map(b => b.toString(16).padStart(2, '0').toUpperCase());
+                log(`• Dữ liệu mảng Byte (HEX): ${hexArray.join(' ')}`);
+              }
+            });
+          }
+
+          log(`==========================================\n`);
+
+          // 5. Sau khi in Debug xong, vẫn tiếp tục gửi UID lên Backend để điểm danh như bình thường
+          if (serialNumber) {
+            await checkinStudent(serialNumber);
+          }
+        });
+        
       } catch (error) {
         logDiv.textContent = `❌ Lỗi NFC: ${error.message || error}`;
       }
