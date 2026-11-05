@@ -83,6 +83,19 @@ app.get('/api/checkins', (req, res) => {
   res.json({ success: true, total: checkinLogs.length, logs: checkinLogs });
 });
 
+// Route kiểm tra trang chủ backend
+app.get('/', (req, res) => {
+  res.json({ success: true, message: "🚀 Backend NFC API đang hoạt động bình thường!" });
+});
+
+// Route phản hồi khi người dùng lỡ mở link /api/checkin bằng trình duyệt
+app.get('/api/checkin', (req, res) => {
+  res.json({ 
+    success: false, 
+    message: "Đường dẫn này chỉ tiếp nhận request dạng POST từ ứng dụng quét NFC." 
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend API đang chạy tại http://localhost:${PORT}`);
