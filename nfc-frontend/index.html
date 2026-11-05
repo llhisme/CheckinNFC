@@ -3,14 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Điểm Danh Sinh Viên - Web Serial API</title>
+  <title>Hệ Thống Điểm Danh Sinh Viên</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; background-color: #f8f9fa; }
-    .card { background: white; padding: 30px 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 420px; margin: 20px auto 0 auto; }
-    .btn-connect { background-color: #28a745; color: white; border: none; padding: 12px 18px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-bottom: 15px; }
-    .status-badge { padding: 10px; border-radius: 6px; font-size: 13px; font-weight: bold; margin-bottom: 15px; background: #e2e3e5; color: #383d41; }
-    input[type="text"] { width: 100%; padding: 16px; font-size: 18px; border: 2px solid #007bff; border-radius: 8px; box-sizing: border-box; text-align: center; outline: none; }
-    .result-box { margin-top: 20px; padding: 16px; border-radius: 8px; text-align: left; display: none; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      text-align: center;
+      background-color: #f8f9fa;
+    }
+    .card {
+      background: white;
+      padding: 30px 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      max-width: 420px;
+      margin: 30px auto 0 auto;
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    .status-badge {
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .hint-text {
+      font-size: 14px;
+      color: #6c757d;
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      border: 2px solid #007bff;
+      border-radius: 8px;
+      box-sizing: border-box;
+      text-align: center;
+      outline: none;
+      box-shadow: 0 0 8px rgba(0, 123, 255, 0.25);
+    }
+    input[type="text"]:focus {
+      border-color: #0056b3;
+      box-shadow: 0 0 10px rgba(0, 86, 179, 0.4);
+    }
+    .result-box {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: left;
+      display: none;
+    }
     .result-box.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .result-box.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
   </style>
@@ -20,27 +69,37 @@
   <div class="card">
     <h2>Điểm Danh Sinh Viên</h2>
 
-    <div id="statusBadge" class="status-badge">⚪ Chưa kết nối máy quét (Virtual COM)</div>
-    <button id="connectSerialBtn" class="btn-connect">🔌 Kết nối Máy Quét QR (Cổng COM)</button>
+    <div id="statusBadge" class="status-badge">
+      🖥️ Hệ thống sẵn sàng: Nhập tay hoặc Quét QR qua App POS
+    </div>
 
+    <p class="hint-text">Nhập MSSV rồi nhấn <strong>ENTER</strong> (hoặc quét mã QR)</p>
+
+    <!-- FORM NHẬP THỦ CÔNG -->
     <form id="checkinForm">
-      <input type="text" id="mssvInput" placeholder="Nhập MSSV thủ công tại đây..." autocomplete="off" autofocus>
+      <input 
+        type="text" 
+        id="mssvInput" 
+        placeholder="Nhập MSSV thủ công tại đây..." 
+        autocomplete="off"
+        autofocus
+      >
     </form>
 
+    <!-- KHUNG KẾT QUẢ ĐIỂM DANH -->
     <div id="resultBox" class="result-box">
       <h3 id="resTitle" style="margin-top: 0; margin-bottom: 10px;"></h3>
       <p style="margin: 5px 0;"><strong>Họ và tên:</strong> <span id="resName"></span></p>
       <p style="margin: 5px 0;"><strong>MSSV:</strong> <span id="resMssv"></span></p>
-      <p style="margin: 5px 0;"><strong>Hình thức:</strong> <span id="resMethod"></span></p>
+      <p style="margin: 5px 0;"><strong>Phương thức:</strong> <span id="resMethod"></span></p>
       <p style="margin: 5px 0;"><strong>Thời gian:</strong> <span id="resTime"></span></p>
     </div>
   </div>
 
   <script>
+    // ⚙️ URL API BACKEND RAILWAY CỦA BẠN
     const BACKEND_URL = 'https://nfc-backend-production-xxxx.up.railway.app/api/checkin';
 
-    const connectSerialBtn = document.getElementById('connectSerialBtn');
-    const statusBadge = document.getElementById('statusBadge');
     const checkinForm = document.getElementById('checkinForm');
     const mssvInput = document.getElementById('mssvInput');
 
@@ -48,76 +107,37 @@
     const resTitle = document.getElementById('resTitle');
     const resName = document.getElementById('resName');
     const resMssv = document.getElementById('resMssv');
-    const resTime = document.getElementById('resTime');
     const resMethod = document.getElementById('resMethod');
+    const resTime = document.getElementById('resTime');
 
-    function keepFocus() { mssvInput.focus(); }
+    // 1. TỰ ĐỘNG KHÓA CON TRỎ LUÔN LUÔN NHẤP NHÁY Ở Ô INPUT THỦ CÔNG
+    function keepFocus() {
+      mssvInput.focus();
+    }
     window.addEventListener('load', keepFocus);
     document.addEventListener('click', keepFocus);
+    mssvInput.addEventListener('blur', () => setTimeout(keepFocus, 10));
 
-    let port;
-    let reader;
-
-    // KẾT NỐI MÁY QUÉT CHẠY CHẾ ĐỘ VIRTUAL COM
-    connectSerialBtn.addEventListener('click', async () => {
-      if (!('serial' in navigator)) {
-        alert('Trình duyệt không hỗ trợ Web Serial! Vui lòng dùng Chrome hoặc Edge trên máy tính.');
-        return;
+    // 2. LUỒNG 1: HÀM HỨNG DỮ LIỆU TỪ APP WINDOWS C# POS (CHẠY NGẦM 100%)
+    // Khi máy quét POS scan QR, C# App sẽ tự động kích hoạt hàm này qua WebView2
+    window.onNativeQrScanned = function(scannedMssv) {
+      if (scannedMssv) {
+        // clearInput = false -> KHÔNG xóa dữ liệu người dùng đang gõ dở trong ô input
+        processCheckin(scannedMssv, 'Máy quét QR POS (Windows Native)', false);
       }
+    };
 
-      try {
-        // Yêu cầu cấp quyền chọn Cổng COM của máy quét
-        port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 }); // Tốc độ baud mặc định thường là 9600 hoặc 115200
-
-        statusBadge.style.background = '#d4edda';
-        statusBadge.style.color = '#155724';
-        statusBadge.textContent = '🟢 Đã kết nối Cổng Serial ngầm! Máy quét sẽ không gõ vào bàn phím nữa.';
-        connectSerialBtn.style.display = 'none';
-
-        // Đọc luồng dữ liệu chữ ngầm từ cổng Serial
-        const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-        reader = textDecoder.readable.getReader();
-
-        let serialBuffer = '';
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            reader.releaseLock();
-            break;
-          }
-
-          serialBuffer += value;
-
-          // Khi nhận được ký tự xuống dòng (\r hoặc \n) tức là đã quét xong 1 mã
-          if (serialBuffer.includes('\r') || serialBuffer.includes('\n')) {
-            const scannedMssv = serialBuffer.replace(/[\r\n]/g, '').trim();
-            serialBuffer = '';
-
-            if (scannedMssv.length > 0) {
-              // Gửi điểm danh ngầm, KHÔNG ảnh hưởng ô input (clearInput = false)
-              processCheckin(scannedMssv, 'Máy quét QR (Serial Mode)', false);
-            }
-          }
-        }
-
-      } catch (err) {
-        alert(`❌ Lỗi kết nối Serial Port: ${err.message}`);
-      }
-    });
-
-    // LUỒNG NHẬP THỦ CÔNG BẰNG BÀN PHÍM
+    // 3. LUỒNG 2: XỬ LÝ KHI NGƯỜI DÙNG TỰ GÕ BẰNG BÀN PHÍM VÀ BẤM ENTER
     checkinForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const mssv = mssvInput.value.trim();
       if (!mssv) return;
 
+      // clearInput = true -> Xóa sạch ô nhập sau khi gửi xong
       await processCheckin(mssv, 'Nhập thủ công', true);
     });
 
-    // HÀM GỬI API CHECK-IN CHUNG
+    // 4. HÀM GỬI REQUEST CHECK-IN CHUNG LÊN BACKEND
     async function processCheckin(mssv, method, clearInput = true) {
       try {
         const response = await fetch(BACKEND_URL, {
@@ -157,7 +177,7 @@
         if (clearInput) {
           mssvInput.value = '';
         }
-        keepFocus();
+        keepFocus(); // Giữ con trỏ nhấp nháy cho lượt tiếp theo
       }
     }
   </script>
